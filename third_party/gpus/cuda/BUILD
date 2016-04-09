@@ -2,8 +2,8 @@ licenses(["restricted"])  # MPL2, portions GPL v3, LGPL v3, BSD-like
 
 load("//tensorflow:tensorflow.bzl", "if_cuda")
 load("//tensorflow/core:platform/default/build_config.bzl",
-     "tf_get_cuda_version",
-     "tf_get_cudnn_version",
+     "tf_get_cuda_lib_ext",
+     "tf_get_cudnn_lib_ext",
     )
 
 package(default_visibility = ["//visibility:public"])
@@ -57,10 +57,10 @@ cc_library(
 cc_library(
     name = "cudart",
     srcs = [
-        "lib64/libcudart.so" + tf_get_cuda_version(),
+        "lib64/libcudart" + tf_get_cuda_lib_ext(),
     ],
     data = [
-        "lib64/libcudart.so" + tf_get_cuda_version(),
+        "lib64/libcudart" + tf_get_cuda_lib_ext(),
     ],
     includes = ["include/"],
     visibility = ["//visibility:public"],
@@ -70,10 +70,10 @@ cc_library(
 cc_library(
     name = "cublas",
     srcs = [
-        "lib64/libcublas.so" + tf_get_cuda_version(),
+        "lib64/libcublas" + tf_get_cuda_lib_ext(),
     ],
     data = [
-        "lib64/libcublas.so" + tf_get_cuda_version(),
+        "lib64/libcublas" + tf_get_cuda_lib_ext(),
     ],
     includes = ["include/"],
     visibility = ["//visibility:public"],
@@ -83,10 +83,10 @@ cc_library(
 cc_library(
     name = "cudnn",
     srcs = [
-        "lib64/libcudnn.so" + tf_get_cudnn_version(),
+        "lib64/libcudnn" + tf_get_cudnn_lib_ext(),
     ],
     data = [
-        "lib64/libcudnn.so" + tf_get_cudnn_version(),
+        "lib64/libcudnn" + tf_get_cudnn_lib_ext(),
     ],
     includes = ["include/"],
     visibility = ["//visibility:public"],
@@ -96,10 +96,10 @@ cc_library(
 cc_library(
     name = "cufft",
     srcs = [
-        "lib64/libcufft.so" + tf_get_cuda_version(),
+        "lib64/libcufft" + tf_get_cuda_lib_ext(),
     ],
     data = [
-        "lib64/libcufft.so" + tf_get_cuda_version(),
+        "lib64/libcufft" + tf_get_cuda_lib_ext(),
     ],
     includes = ["include/"],
     visibility = ["//visibility:public"],
@@ -134,14 +134,14 @@ genrule(
         "include/cublas.h",
         "include/cudnn.h",
         "lib64/libcudart_static.a",
-        "lib64/libcublas.so" + tf_get_cuda_version(),
-        "lib64/libcudnn.so" + tf_get_cudnn_version(),
-        "lib64/libcudart.so" + tf_get_cuda_version(),
-        "lib64/libcufft.so" + tf_get_cuda_version(),
+        "lib64/libcublas" + tf_get_cuda_lib_ext(),
+        "lib64/libcudnn" + tf_get_cudnn_lib_ext(),
+        "lib64/libcudart" + tf_get_cuda_lib_ext(),
+        "lib64/libcufft" + tf_get_cuda_lib_ext(),
     ],
     cmd = if_cuda(
         # Under cuda config, create all the symbolic links to the actual cuda files
-        "OUTPUTDIR=`readlink -f $(@D)/../../..`; cd `dirname $(location :cuda_config.sh)`; OUTPUTDIR=$$OUTPUTDIR ./cuda_config.sh --check;",
+        "OUTPUTDIR=`python -c 'import os,sys; print os.path.abspath(sys.argv[1])' $(@D)/../../..`; cd `dirname $(location :cuda_config.sh)`; OUTPUTDIR=$$OUTPUTDIR ./cuda_config.sh --check;",
 
         # Under non-cuda config, create all dummy files to make the build go through
         ";".join([
@@ -151,10 +151,10 @@ genrule(
           "touch $(@D)/include/cublas.h",
           "touch $(@D)/include/cudnn.h",
           "touch $(@D)/lib64/libcudart_static.a",
-          "touch $(@D)/lib64/libcublas.so" + tf_get_cuda_version(),
-          "touch $(@D)/lib64/libcudnn.so" + tf_get_cudnn_version(),
-          "touch $(@D)/lib64/libcudart.so" + tf_get_cuda_version(),
-          "touch $(@D)/lib64/libcufft.so" + tf_get_cuda_version(),
+          "touch $(@D)/lib64/libcublas" + tf_get_cuda_lib_ext(),
+          "touch $(@D)/lib64/libcudnn" + tf_get_cudnn_lib_ext(),
+          "touch $(@D)/lib64/libcudart" + tf_get_cuda_lib_ext(),
+          "touch $(@D)/lib64/libcufft" + tf_get_cuda_lib_ext(),
             ]),
     ),
     local = 1,
@@ -167,7 +167,7 @@ genrule(
     ],
     cmd = if_cuda(
         # Under cuda config, create the symbolic link to the actual cuda.config
-        "configfile=$(location :cuda.config); ln -sf `readlink -f $${configfile#*/*/*/}` $(@D)/;",
+        "configfile=$(location :cuda.config); ln -sf `python -c 'import os,sys; print os.path.abspath(sys.argv[1])' $${configfile#*/*/*/}` $(@D)/;",
 
         # Under non-cuda config, create the dummy file
         ";".join([
