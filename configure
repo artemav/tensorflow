@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+case "$OSTYPE" in
+    darwin*)
+        TF_LIB_EXT=".dylib"
+        TF_LIB_EXT_TEMPLATE=".%s.dylib"
+        ;;
+    linux*)
+        TF_LIB_EXT=".so"
+        TF_LIB_EXT_TEMPLATE=".so.%s"
+        ;;
+    *)
+        exit 1
+        ;;
+esac
+
 ## Set up python-related environment settings
 while true; do
   fromuser=""
@@ -58,7 +72,6 @@ while true; do
   if [ -z "$TF_CUDA_VERSION" ]; then
     read -p "Please specify the Cuda SDK version you want to use, e.g. 7.0. [Leave empty to use system default]: " TF_CUDA_VERSION
   fi
-
   fromuser=""
   if [ -z "$CUDA_TOOLKIT_PATH" ]; then
     default_cuda_path=/usr/local/cuda
@@ -68,15 +81,15 @@ while true; do
       CUDA_TOOLKIT_PATH=$default_cuda_path
     fi
   fi
-  if [[ -z "$TF_CUDA_VERSION" ]]; then
-    TF_CUDA_EXT=""
+  if [ -z "$TF_CUDA_VERSION" ]; then
+    TF_CUDA_LIB_EXT="$TF_LIB_EXT"
   else
-    TF_CUDA_EXT=".$TF_CUDA_VERSION"
+    TF_CUDA_LIB_EXT=$(printf $TF_LIB_EXT_TEMPLATE "$TF_CUDA_VERSION")
   fi
-  if [ -e $CUDA_TOOLKIT_PATH/lib64/libcudart.so$TF_CUDA_EXT ]; then
+  if [ -e $CUDA_TOOLKIT_PATH/lib64/libcudart$TF_CUDA_LIB_EXT ]; then
     break
   fi
-  echo "Invalid path to CUDA $TF_CUDA_VERSION toolkit. $CUDA_TOOLKIT_PATH/lib64/libcudart.so$TF_CUDA_EXT cannot be found"
+  echo "Invalid path to CUDA $TF_CUDA_VERSION toolkit. $CUDA_TOOLKIT_PATH/lib64/libcudart$TF_CUDA_LIB_EXT cannot be found"
   if [ -z "$fromuser" ]; then
     exit 1
   fi
@@ -91,7 +104,6 @@ while true; do
   if [ -z "$TF_CUDNN_VERSION" ]; then
     read -p "Please specify the Cudnn version you want to use. [Leave empty to use system default]: " TF_CUDNN_VERSION
   fi
-
   fromuser=""
   if [ -z "$CUDNN_INSTALL_PATH" ]; then
     default_cudnn_path=${CUDA_TOOLKIT_PATH}
@@ -102,25 +114,28 @@ while true; do
     fi
     # Result returned from "read" will be used unexpanded. That make "~" unuseable.
     # Going through one more level of expansion to handle that.
-    CUDNN_INSTALL_PATH=$(bash -c "readlink -f $CUDNN_INSTALL_PATH")
+    CUDNN_INSTALL_PATH="${CUDNN_INSTALL_PATH/#\~/$HOME}"
   fi
   if [[ -z "$TF_CUDNN_VERSION" ]]; then
-    TF_CUDNN_EXT=""
+    TF_CUDNN_LIB_EXT="$TF_LIB_EXT"
   else
-    TF_CUDNN_EXT=".$TF_CUDNN_VERSION"
+    TF_CUDNN_LIB_EXT=$(printf $TF_LIB_EXT_TEMPLATE "$TF_CUDNN_VERSION")
   fi
-  if [ -e "$CUDNN_INSTALL_PATH/libcudnn.so${TF_CUDNN_EXT}" -o -e "$CUDNN_INSTALL_PATH/lib64/libcudnn.so${TF_CUDNN_EXT}" ]; then
+  echo "$CUDNN_INSTALL_PATH/libcudnn${TF_CUDNN_LIB_EXT}"
+  echo "$CUDNN_INSTALL_PATH/lib64/libcudnn${TF_CUDNN_LIB_EXT}"
+  if [ -e "$CUDNN_INSTALL_PATH/libcudnn${TF_CUDNN_LIB_EXT}" -o -e "$CUDNN_INSTALL_PATH/lib64/libcudnn${TF_CUDNN_LIB_EXT}" ]; then
     break
   fi
-  CUDNN_PATH_FROM_LDCONFIG="$(ldconfig -p | sed -n 's/.*libcudnn.so .* => \(.*\)/\1/p')"
-  if [ -e "${CUDNN_PATH_FROM_LDCONFIG}${TF_CUDNN_EXT}" ]; then
-    CUDNN_INSTALL_PATH="$(dirname ${CUDNN_PATH_FROM_LDCONFIG})"
-    break
+  if [[ ! -z "$(which ldconfig)" ]]; then
+    CUDNN_PATH_FROM_LDCONFIG="$(ldconfig -p | sed -n 's/.*libcudnn.so .* => \(.*\)/\1/p')"
+    if [ -e "${CUDNN_PATH_FROM_LDCONFIG}${TF_CUDNN_LIB_EXT}" ]; then
+      CUDNN_INSTALL_PATH="$(dirname ${CUDNN_PATH_FROM_LDCONFIG})"
+      break
+    fi
   fi
   echo "Invalid path to cuDNN ${TF_CUDNN_VERSION} toolkit. Neither of the following two files can be found:"
-  echo "$CUDNN_INSTALL_PATH/lib64/libcudnn.so${TF_CUDNN_EXT}"
-  echo "$CUDNN_INSTALL_PATH/libcudnn.so${TF_CUDNN_EXT}"
-  echo "${CUDNN_PATH_FROM_LDCONFIG}${TF_CUDNN_EXT}"
+  echo "$CUDNN_INSTALL_PATH/lib64/libcudnn${TF_CUDNN_LIB_EXT}"
+  echo "$CUDNN_INSTALL_PATH/libcudnn${TF_CUDNN_LIB_EXT}"
   if [ -z "$fromuser" ]; then
     exit 1
   fi
@@ -139,20 +154,24 @@ CUDA_TOOLKIT_PATH="$CUDA_TOOLKIT_PATH"
 CUDNN_INSTALL_PATH="$CUDNN_INSTALL_PATH"
 
 # The Cuda SDK version that should be used in this build (empty to use libcudart.so symlink)
-TF_CUDA_VERSION=$TF_CUDA_EXT
+TF_CUDA_VERSION=$TF_CUDA_VERSION
 
 # The Cudnn version that should be used in this build (empty to use libcudnn.so symlink)
-TF_CUDNN_VERSION=$TF_CUDNN_EXT
+TF_CUDNN_VERSION=$TF_CUDNN_VERSION
+
+TF_CUDA_LIB_EXT=$TF_CUDA_LIB_EXT
+
+TF_CUDNN_LIB_EXT=$TF_CUDNN_LIB_EXT
 
 EOF
 
 # Configure the Cuda toolkit version to work with.
-perl -pi -e "s,CUDA_VERSION = \"[0-9\.]*\",CUDA_VERSION = \"$TF_CUDA_EXT\",s" tensorflow/core/platform/default/build_config.bzl
-perl -pi -e "s,(GetCudaVersion.*return )\"[0-9\.]*\",\1\"$TF_CUDA_EXT\",s" tensorflow/stream_executor/dso_loader.cc
+perl -pi -e "s,CUDA_LIB_EXT ?= ?\"[0-9\.]*\",CUDA_LIB_EXT = \"$TF_CUDA_LIB_EXT\",s" tensorflow/core/platform/default/build_config.bzl
+perl -pi -e "s,(GetCudaVersion.*return )\"[0-9\.]*\",\1\"$TF_CUDA_LIB_EXT\",s" tensorflow/stream_executor/dso_loader.cc
 
 # Configure the Cudnn version to work with.
-perl -pi -e "s,CUDNN_VERSION = \"[0-9\.]*\",CUDNN_VERSION = \"$TF_CUDNN_EXT\",s" tensorflow/core/platform/default/build_config.bzl
-perl -pi -e "s,(GetCudnnVersion.*return )\"[0-9\.]*\",\1\"$TF_CUDNN_EXT\",s" tensorflow/stream_executor/dso_loader.cc
+perl -pi -e "s,CUDNN_LIB_EXT ?= ?\"[0-9\.]*\",CUDNN_LIB_EXT = \"$TF_CUDNN_LIB_EXT\",s" tensorflow/core/platform/default/build_config.bzl
+perl -pi -e "s,(GetCudnnVersion.*return )\"[0-9\.]*\",\1\"$TF_CUDNN_LIB_EXT\",s" tensorflow/stream_executor/dso_loader.cc
 
 # Configure the compute capabilities that TensorFlow builds for.
 # Since Cuda toolkit is not backward-compatible, this is not guaranteed to work.

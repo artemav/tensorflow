@@ -9,7 +9,7 @@ exports_files(["LICENSE"])
 
 load("//tensorflow:tensorflow.bzl", "tf_copts")
 load("//tensorflow:tensorflow.bzl", "tf_cuda_library")
-load("//tensorflow/core:platform/default/build_config.bzl", "tf_get_cuda_version")
+load("//tensorflow/core:platform/default/build_config.bzl", "tf_get_cuda_lib_ext")
 
 cc_library(
     name = "gtest",
@@ -69,7 +69,7 @@ filegroup(
 cc_library(
     name = "cuda",
     data = [
-        "//third_party/gpus/cuda:lib64/libcudart.so" + tf_get_cuda_version(),
+        "//third_party/gpus/cuda:lib64/libcudart" + tf_get_cuda_lib_ext(),
     ],
     linkopts = [
         "-Wl,-rpath,third_party/gpus/cuda/lib64",
